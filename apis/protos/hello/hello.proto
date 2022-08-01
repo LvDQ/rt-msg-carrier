@@ -1,0 +1,19 @@
+syntax = "proto3";
+package rt-msg-carrier.service.v1.hello;
+option go_package = "github.com/kyky/grpc-gateway-demo/gen/go/ky/service/v1";
+
+import "google/api/annotations.proto";
+
+message StringMessage {
+  string value = 1;
+}
+
+service GreeterService {
+  rpc SayHello(StringMessage) returns (StringMessage) {}
+  rpc Echo(StringMessage) returns (StringMessage) {
+    option (google.api.http) = {
+      post: "/v1/example/echo"
+      body: "*"
+    };
+  }
+}
