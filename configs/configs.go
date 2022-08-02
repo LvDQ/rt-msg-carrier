@@ -1,14 +1,14 @@
 package configs
 
 import (
-	"bytes"
-	"io"
+	"fmt"
 	"os"
 	"path/filepath"
 	"rt-msg-carrier/pkg/env"
 	"rt-msg-carrier/pkg/file"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -71,44 +71,7 @@ type Config struct {
 	} `toml:"server"`
 }
 
-var (
-	devConfigs []byte
-
-	fatConfigs []byte
-
-	uatConfigs []byte
-
-	proConfigs []byte
-)
-
 func init() {
-	var r io.Reader
-
-	switch env.Active().Value() {
-	case "dev":
-		r = bytes.NewReader(devConfigs)
-	case "fat":
-		r = bytes.NewReader(fatConfigs)
-	case "uat":
-		r = bytes.NewReader(uatConfigs)
-	case "pro":
-		r = bytes.NewReader(proConfigs)
-	default:
-		r = bytes.NewReader(fatConfigs)
-	}
-
-	viper.SetConfigType("toml")
-
-	if err := viper.ReadConfig(r); err != nil {
-		panic(err)
-	}
-
-	if err := viper.Unmarshal(config); err != nil {
-		panic(err)
-	}
-
-	viper.SetConfigName(env.Active().Value() + "_configs")
-	viper.AddConfigPath("./configs")
 
 	configFile := "./configs/" + env.Active().Value() + "_configs.toml"
 	_, ok := file.IsExists(configFile)
@@ -127,6 +90,21 @@ func init() {
 			panic(err)
 		}
 	}
+
+	_, err := toml.DecodeFile(configFile, &config)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	viper.SetConfigType("toml")
+
+	if err := viper.Unmarshal(config); err != nil {
+		panic(err)
+	}
+
+	viper.SetConfigName(env.Active().Value() + "_configs")
+	viper.AddConfigPath("./configs")
 
 	viper.WatchConfig()
 	viper.OnConfigChange(func(e fsnotify.Event) {

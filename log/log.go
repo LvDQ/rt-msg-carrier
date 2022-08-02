@@ -117,7 +117,7 @@ func NewAccessLogger() *logrus.Logger {
 	if AccessLogger != nil {
 		return AccessLogger
 	}
-	file := configs.ProjectBizLogFile
+	file := configs.ProjectAccessLogFile
 	//设置日志切割 rotatelogs
 	logWriter1, _ := rotatelogs.New(
 		file+".%Y%m%d_access_log.log",

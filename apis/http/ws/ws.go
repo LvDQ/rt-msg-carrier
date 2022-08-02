@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,9 +26,10 @@ type User struct {
 }
 
 type Message struct {
-	Type    string      `json:"type" binding:"required"`
-	TopicId string      `json:"topic_id" binding:"required"`
-	Data    interface{} `json:"data" binding:"required"`
+	Type      string      `json:"type" binding:"required"`
+	TopicId   string      `json:"topic_id" binding:"required"`
+	Data      interface{} `json:"data" binding:"required"`
+	Namespace string      `json:"ns"`
 }
 
 type UserSlices []*User
@@ -75,6 +77,7 @@ func deleteTopicUser(ctx context.Context, logger *logrus.Logger, topicId string,
 			logger.Debug("deleted idx:", idx)
 			user.Conn.Close()
 			UserList[topicId] = append(UserList[topicId][:idx], UserList[topicId][idx+1:]...)
+			logger.Debug("drop the conn with one user. topic_id: " + topicId)
 		}
 	}
 	if len(UserList[topicId]) <= 0 {
@@ -82,16 +85,29 @@ func deleteTopicUser(ctx context.Context, logger *logrus.Logger, topicId string,
 	}
 }
 
-func PostWsMessage(ctx context.Context, logger *logrus.Logger, msg *Message) (bool, error) {
-	if userlice, ok := UserList[msg.TopicId]; ok {
+func postAllWsMessage(ctx context.Context, logger *logrus.Logger, msg *Message) (bool, error) {
+	notifiedNum := 0
+	totalNum := 0
+	for key, _ := range UserList {
+		totalNum += 1
+		_, err := postWsMessage(ctx, logger, key, msg)
+		if err != nil {
+			continue
+		}
+		notifiedNum += 1
+	}
+	return true, nil
+}
+
+func postWsMessage(ctx context.Context, logger *logrus.Logger, topic string, msg *Message) (bool, error) {
+	if userlice, ok := UserList[topic]; ok {
 		for _, user := range userlice {
 			user.mu.Lock()
 			defer user.mu.Unlock()
 			err := user.SendMsg(ctx, logger, msg)
 			if err != nil {
-				deleteTopicUser(ctx, logger, msg.TopicId, user)
-				// return false, err
-				logger.Debug("drop the conn with one user")
+				logger.Debug("Send ws msg failed! err: " + err.Error())
+				deleteTopicUser(ctx, logger, topic, user)
 			}
 		}
 	} else {
@@ -99,6 +115,15 @@ func PostWsMessage(ctx context.Context, logger *logrus.Logger, msg *Message) (bo
 		return false, err
 	}
 	return true, nil
+}
+
+func PostWsMessage(ctx context.Context, logger *logrus.Logger, msg *Message) (bool, error) {
+
+	if strings.ToLower(msg.TopicId) == "all" {
+		return postAllWsMessage(ctx, logger, msg)
+	} else {
+		return postWsMessage(ctx, logger, msg.TopicId, msg)
+	}
 }
 
 // @BasePath /rt-msg-carrier/v1/
